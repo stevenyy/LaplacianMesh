@@ -13,6 +13,18 @@ import scipy.io as sio
 ##                  Laplacian Mesh Editing                  ##
 ##############################################################
 
+def getLaplacianMatrixHelp(mesh, anchorsIdx, weight):
+    N = len(mesh.vertices)
+    K = len(anchorsIdx)
+    I = [[nb.ID for nb in vtx.getVertexNeighbors()] for vtx in mesh.vertices]
+    J = [[index]*len(row) for index, row in enumerate(I)]
+    I = [item for sublist in I for item in sublist] + range(N + K)
+    J = [item for sublist in J for item in sublist] + range(N) + anchorsIdx
+    V = [[weight(nb, vtx) for nb in vtx.getVertexNeighbors()] for vtx in mesh.vertices]
+    V = [item for sublist in V for item in sublist] + [-sum(row) for row in V] + [1]*K
+    L = sparse.coo_matrix((V, (I, J)), shape=(N+K, N)).tocsr()
+    return L
+
 #Purpose: To return a sparse matrix representing a Laplacian matrix with
 #the graph Laplacian (D - A) in the upper square part and anchors as the
 #lower rows
@@ -20,12 +32,9 @@ import scipy.io as sio
 #Returns: L (An (N+K) x N sparse matrix, where N is the number of vertices
 #and K is the number of anchors)
 def getLaplacianMatrixUmbrella(mesh, anchorsIdx):
-    #TODO: These are dummy values
-    I = [0]
-    J = [0]
-    V = [0]
-    L = sparse.coo_matrix((V, (I, J)), shape=(N+K, N)).tocsr()
-    return L
+    def weight(v1, v2):
+        return -1
+    return getLaplacianMatrixHelp(mesh, anchorsIdx, weight)
 
 #Purpose: To return a sparse matrix representing a laplacian matrix with
 #cotangent weights in the upper square part and anchors as the lower rows
@@ -33,12 +42,13 @@ def getLaplacianMatrixUmbrella(mesh, anchorsIdx):
 #Returns: L (An (N+K) x N sparse matrix, where N is the number of vertices
 #and K is the number of anchors)
 def getLaplacianMatrixCotangent(mesh, anchorsIdx):
-    #TODO: These are dummy values
-    I = [0]
-    J = [0]
-    V = [0]
-    L = sparse.coo_matrix((V, (I, J)), shape=(N+K, N)).tocsr()
-    return L
+    def weight(v1, v2):
+        edge = getEdgeInCommon(v1, v2)
+        vtx = [[v for v in face.getVertices() if (v != v1) and (v != v2)][0] for face in [edge.f1, edge.f2] if face]
+        pos = [[v1.getPos()-v3.getPos(), v2.getPos()-v3.getPos()] for v3 in vtx]
+        cot = [np.dot(v3[0], v3[1])/np.linalg.norm(np.cross(v3[0], v3[1])) for v3 in pos]
+        return -sum(cot)/len(cot)
+    return getLaplacianMatrixHelp(mesh, anchorsIdx, weight)
 
 #Purpose: Given a mesh, to perform Laplacian mesh editing by solving the system
 #of delta coordinates and anchors in the least squared sense
@@ -46,8 +56,11 @@ def getLaplacianMatrixCotangent(mesh, anchorsIdx):
 #coordinates), anchorsIdx (a parallel array of the indices of the anchors)
 #Returns: Nothing (should update mesh.VPos)
 def solveLaplacianMesh(mesh, anchors, anchorsIdx):
-    print "TODO"
-    #TODO: Finish this
+    L = getLaplacianMatrixCotangent(mesh, anchorsIdx)
+    delta = np.array(L.dot(mesh.VPos))
+    delta[-len(anchorsIdx):, :] = anchors
+    for col in range(3):
+        mesh.VPos[:, col] = lsqr(L, delta[:, col])[0]
 
 #Purpose: Given a few RGB colors on a mesh, smoothly interpolate those colors
 #by using their values as anchors and 
@@ -158,3 +171,7 @@ def getTexCoords(mesh, quadIdxs):
 
 if __name__ == '__main__':
     print "TODO"
+    # mesh = PolyMesh()
+    # mesh.loadFile("meshes/teapot.off")
+    # solveLaplacianMesh(mesh, [[0,0,0],[1,1,1]], [3, 5])
+    # print getLaplacianMatrixUmbrella(mesh, [3, 5]) != getLaplacianMatrixCotangent(mesh, [3, 5])

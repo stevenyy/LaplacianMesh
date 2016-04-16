@@ -61,6 +61,10 @@ class MeshViewerCanvas(BasicMeshCanvas):
         self.colorPickTexID = None
         self.colorPosVBO = None
         self.colorColorVBO = None
+        
+        self.Bind(wx.EVT_KEY_DOWN, self.onKeyPress)
+        self.Bind(wx.EVT_KEY_UP, self.onKeyRelease)
+        self.pressingC = False
     
     def displayMeshFacesCheckbox(self, evt):
         self.displayMeshFaces = evt.Checked()
@@ -91,6 +95,14 @@ class MeshViewerCanvas(BasicMeshCanvas):
         self.useTexture = evt.Checked()
         self.needsDisplayUpdate = True
         self.Refresh()    
+    
+    def onKeyPress(self, evt):
+        if evt.GetUnicodeKey() == 67:
+            self.pressingC = True
+    
+    def onKeyRelease(self, evt):
+        if evt.GetUnicodeKey() == 67:
+            self.pressingC = False
     
     #######Laplacian mesh menu handles
     def doLaplacianMeshSelectVertices(self, evt):
@@ -411,7 +423,7 @@ class MeshViewerCanvas(BasicMeshCanvas):
         elif self.GUIState == STATE_CHOOSECOLORVERTICES:
             if state.ShiftDown():
                 self.GUISubstate = COLORPICK_PICKVERTEX
-            elif state.ControlDown():
+            elif state.CmdDown() or self.pressingC:
                 self.GUISubstate = COLORPICK_PICKCOLOR
         x, y = evt.GetPosition()
         self.CaptureMouse()
@@ -427,7 +439,7 @@ class MeshViewerCanvas(BasicMeshCanvas):
         dY = self.MousePos[1] - lastY
         if evt.Dragging():
             idx = self.laplaceCurrentIdx
-            if self.GUIState == STATE_CHOOSELAPLACEVERTICES and state.ControlDown() and self.laplaceCurrentIdx in self.laplacianConstraints:
+            if self.GUIState == STATE_CHOOSELAPLACEVERTICES and (state.CmdDown() or self.pressingC) and self.laplaceCurrentIdx in self.laplacianConstraints:
                 #Move up laplacian mesh constraint based on where the user drags
                 #the mouse
                 t = self.camera.towards
@@ -598,7 +610,7 @@ class MeshViewerFrame(wx.Frame):
         self.glcanvas.Show()
     
     def OnLoadMesh(self, evt):
-        dlg = wx.FileDialog(self, "Choose a file", ".", "", "OFF files (*.off)|*.off|TOFF files (*.toff)|*.toff|OBJ files (*.obj)|*.obj", wx.OPEN)
+        dlg = wx.FileDialog(self, "Choose a file", ".", "", "OFF files (*.off)|*.off|TOFF files (*.toff)|*.toff|OBJ files (*.obj)|*.obj", wx.FD_OPEN)
         if dlg.ShowModal() == wx.ID_OK:
             filename = dlg.GetFilename()
             dirname = dlg.GetDirectory()
@@ -617,7 +629,7 @@ class MeshViewerFrame(wx.Frame):
         return
 
     def OnSaveMesh(self, evt):
-        dlg = wx.FileDialog(self, "Choose a file", ".", "", "*", wx.SAVE)
+        dlg = wx.FileDialog(self, "Choose a file", ".", "", "*", wx.FD_SAVE)
         if dlg.ShowModal() == wx.ID_OK:
             filename = dlg.GetFilename()
             dirname = dlg.GetDirectory()
@@ -628,7 +640,7 @@ class MeshViewerFrame(wx.Frame):
         return     
         
     def OnSaveScreenshot(self, evt):
-        dlg = wx.FileDialog(self, "Choose a file", ".", "", "*", wx.SAVE)
+        dlg = wx.FileDialog(self, "Choose a file", ".", "", "*", wx.FD_SAVE)
         if dlg.ShowModal() == wx.ID_OK:
             filename = dlg.GetFilename()
             dirname = dlg.GetDirectory()
