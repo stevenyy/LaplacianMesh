@@ -19,7 +19,8 @@ def getLaplacianMatrixHelp(mesh, anchorsIdx, weight):
     I = [[nb.ID for nb in vtx.getVertexNeighbors()] for vtx in mesh.vertices]
     J = [[index]*len(row) for index, row in enumerate(I)]
     I = [item for sublist in I for item in sublist] + range(N + K)
-    J = [item for sublist in J for item in sublist] + range(N) + anchorsIdx
+    J = [item for sublist in J for item in sublist] + range(N)
+    J = np.concatenate((J, anchorsIdx))
     V = [[weight(nb, vtx) for nb in vtx.getVertexNeighbors()] for vtx in mesh.vertices]
     V = [item for sublist in V for item in sublist] + [-sum(row) for row in V] + [1]*K
     L = sparse.coo_matrix((V, (I, J)), shape=(N+K, N)).tocsr()
@@ -172,6 +173,6 @@ def getTexCoords(mesh, quadIdxs):
 if __name__ == '__main__':
     print "TODO"
     # mesh = PolyMesh()
-    # mesh.loadFile("meshes/teapot.off")
-    # solveLaplacianMesh(mesh, [[0,0,0],[1,1,1]], [3, 5])
-    # print getLaplacianMatrixUmbrella(mesh, [3, 5]) != getLaplacianMatrixCotangent(mesh, [3, 5])
+    # mesh.loadFile("meshes/homer.off")
+    # solveLaplacianMesh(mesh, np.array([[0,0,0],[1,1,1]]), np.array([3,5]))
+    # print getLaplacianMatrixUmbrella(mesh, np.array([3,5])) != getLaplacianMatrixCotangent(mesh, np.array([3,5]))
