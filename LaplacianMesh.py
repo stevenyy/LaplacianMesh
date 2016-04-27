@@ -207,7 +207,6 @@ def doFlattening(mesh, quadIdxs):
     for col in range(3):
         mesh.VPos[:, col] = lsqr(L, delta[:, col])[0]
     # mesh.VPos[:, 2] = 0
-    print mesh.VPos
 
 #Purpose: Given 4 vertex indices on a quadrilateral, to anchor them to the 
 #square and flatten the rest of the mesh inside of that square.  Then, to 
@@ -224,6 +223,7 @@ if __name__ == '__main__':
     print "TODO"
     # mesh = PolyMesh()
     # mesh.loadFile("meshes/homer.off")
+    # print getLaplacianMatrixHelp(mesh, [], cotangentWeight) != getLaplacianMatrixHelp2(mesh, [], cotangentWeight)
     # doFlattening(mesh, [0, 1, 2, 3])
     # print [vtx.ID for vtx in mesh.vertices]
     # makeMinimalSurface(mesh, np.array([[0,0,0],[1,1,1]]), np.array([3,5]))
