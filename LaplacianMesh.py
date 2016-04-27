@@ -26,6 +26,21 @@ def getLaplacianMatrixHelp(mesh, anchorsIdx, weight):
     L = sparse.coo_matrix((V, (I, J)), shape=(N+K, N)).tocsr()
     return L
 
+
+def getLaplacianMatrixHelpSquare(mesh, weight):
+    N = len(mesh.vertices)
+    I = [[nb.ID for nb in vtx.getVertexNeighbors()] for vtx in mesh.vertices]
+    J = [[index]*len(row) for index, row in enumerate(I)]
+    I = [item for sublist in I for item in sublist] + range(N)
+    J = [item for sublist in J for item in sublist] + range(N)
+    #J = np.concatenate((J, anchorsIdx))
+    V = [[weight(nb, vtx) for nb in vtx.getVertexNeighbors()] for vtx in mesh.vertices]
+    V = [item for sublist in V for item in sublist] + [-sum(row) for row in V] #+ [1]*K
+
+    L = sparse.coo_matrix((V, (I, J)), shape=(N, N)).tocsr()
+    return L
+
+
 #Purpose: To return a sparse matrix representing a Laplacian matrix with
 #the graph Laplacian (D - A) in the upper square part and anchors as the
 #lower rows
@@ -34,7 +49,7 @@ def getLaplacianMatrixHelp(mesh, anchorsIdx, weight):
 #and K is the number of anchors)
 def getLaplacianMatrixUmbrella(mesh, anchorsIdx):
     def weight(v1, v2):
-        return -1
+        return -1.0
     return getLaplacianMatrixHelp(mesh, anchorsIdx, weight)
 
 #Purpose: To return a sparse matrix representing a laplacian matrix with
@@ -69,17 +84,31 @@ def solveLaplacianMesh(mesh, anchors, anchorsIdx):
 #coordinates), anchorsIdx (a parallel array of the indices of the anchors)
 #Returns: Nothing (should update mesh.VPos)
 def smoothColors(mesh, colors, colorsIdx):
-    N = mesh.VPos.shape[0]
-    colors = np.zeros((N, 3)) #dummy values (all black)
-    #TODO: Finish this
-    return colors
+    L = getLaplacianMatrixUmbrella(mesh, colorsIdx)
+    delta = np.zeros((L.shape[0],3))
+    delta[-len(colorsIdx):, :] = colors
+    for col in range(3):
+        mesh.VPos[:, col] = lsqr(L, delta[:, col])[0]
+    return mesh.VPos
+
+    
+#    N = mesh.VPos.shape[0]
+#    colors = np.zeros((N, 3)) #dummy values (all black)
+#    #TODO: Finish this
+#    return colors
 
 #Purpose: Given a mesh, to smooth it by subtracting off the delta coordinates
 #from each vertex, normalized by the degree of that vertex
 #Inputs: mesh (polygon mesh object)
 #Returns: Nothing (should update mesh.VPos)
 def doLaplacianSmooth(mesh):
-    print "TODO"
+    def weight(v1, v2):
+        return -1.0
+    L = getLaplacianMatrixHelpSquare(mesh, weight)
+    for i in range(L.shape[0]):
+        L[i] = np.true_divide(L[i].nonzero(), L[i,i])
+    print(L)
+    mesh.VPos = np.subtract(mesh.VPos, L*mesh.VPos)
     #TODO: Finish this
 
 #Purpose: Given a mesh, to sharpen it by adding back the delta coordinates
@@ -87,7 +116,15 @@ def doLaplacianSmooth(mesh):
 #Inputs: mesh (polygon mesh object)
 #Returns: Nothing (should update mesh.VPos)
 def doLaplacianSharpen(mesh):
-    print "TODO"
+    def weight(v1, v2):
+        return -1.0
+    L = getLaplacianMatrixHelpSquare(mesh, weight)
+    print(L)
+    for i in range(L.shape[0]):
+        if L[i,i]!=0:
+            L[i] = np.true_divide(L[i], L[i,i])
+    print(L)
+    mesh.VPos = np.add(mesh.VPos, L*mesh.VPos)
     #TODO: Finish this
 
 #Purpose: Given a mesh and a set of anchors, to simulate a minimal surface
@@ -98,8 +135,15 @@ def doLaplacianSharpen(mesh):
 #coordinates), anchorsIdx (a parallel array of the indices of the anchors)
 #Returns: Nothing (should update mesh.VPos)
 def makeMinimalSurface(mesh, anchors, anchorsIdx):
-    print "TODO"
-    #TODO: Finish this
+    L = getLaplacianMatrixCotangent(mesh, anchorsIdx)
+    delta = np.zeros((L.shape[0],mesh.VPos.shape[1]))
+    for i in range(len(anchorsIdx)):
+        L[anchorsIdx[i],:]=0
+        L[anchorsIdx[i],anchorsIdx[i]]=1
+        delta[anchorsIdx[i]] = anchors[i]
+    for col in range(3):
+        mesh.VPos[:, col] = lsqr(L, delta[:, col])[0]
+    return mesh.VPos
 
 ##############################################################
 ##        Spectral Representations / Heat Flow              ##
@@ -111,16 +155,30 @@ def makeMinimalSurface(mesh, anchors, anchorsIdx):
 #Returns: (eigvalues, eigvectors): a tuple of the eigenvalues and eigenvectors
 def getLaplacianSpectrum(mesh, K):
     #TODO: Finish this
-    return (None, None)
+    def weight(v1, v2):
+        return -1.0
+    L = getLaplacianMatrixHelpSquare(mesh, weight)
+    (eigvalues, eigvectors) = sparse.linalg.eigsh(L, K, which='LM', sigma = 0) 
+    return (eigvalues, eigvectors)
 
 #Purpose: Given a mesh, to use the first K eigenvectors of its Laplacian
 #to perform a lowpass filtering
 #Inputs: mesh (polygon mesh object), K (number of eigenvalues/eigenvectors)
 #Returns: Nothing (should update mesh.VPos)
 def doLowpassFiltering(mesh, K):
-    print "TODO"
-    #TODO: Finish this
-    
+    def weight(v1, v2):
+        edge = getEdgeInCommon(v1, v2)
+        vtx = [[v for v in face.getVertices() if (v != v1) and (v != v2)][0] for face in [edge.f1, edge.f2] if face]
+        pos = [[v1.getPos()-v3.getPos(), v2.getPos()-v3.getPos()] for v3 in vtx]
+        cot = [np.dot(v3[0], v3[1])/np.linalg.norm(np.cross(v3[0], v3[1])) for v3 in pos]
+        return -sum(cot)/len(cot)
+    L = getLaplacianMatrixHelpSquare(mesh, weight)
+    vals, vecs = eigsh(L, K, which='LM',sigma=0)
+    for col in range(3):
+        mesh.VPos[:,col] = np.dot(np.dot(vecs, np.transpose(vecs)),mesh.VPos[:,col])
+
+
+        
 #Purpose: Given a mesh, to simulate heat flow by projecting initial conditions
 #onto the eigenvectors of the Laplacian matrix, and then to sum up the heat
 #flow of each eigenvector after it's decayed after an amount of time t
