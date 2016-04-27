@@ -26,15 +26,16 @@ def getLaplacianMatrixHelp(mesh, anchorsIdx, weight):
     L = sparse.coo_matrix((V, (I, J)), shape=(N+K, N)).tocsr()
     return L
 
-
-def getLaplacianMatrixHelpSquare(mesh, weight):
+def getLaplacianMatrixHelp2(mesh, quadIdxs, weight):
     N = len(mesh.vertices)
-    I = [[nb.ID for nb in vtx.getVertexNeighbors()] for vtx in mesh.vertices]
-    J = [[index]*len(row) for index, row in enumerate(I)]
+    X = [vtx.getVertexNeighbors() if vtx.ID not in quadIdxs else [] for vtx in mesh.vertices]
+    I = [[index]*len(row) for index, row in enumerate(X)]
+    J = [[nb.ID for nb in row] for row in X]
+    V = [[weight(nb, mesh.vertices[index]) for nb in row] for index, row in enumerate(X)]
+    D = [-sum(row) if index not in quadIdxs else 1 for index, row in enumerate(V)]
     I = [item for sublist in I for item in sublist] + range(N)
     J = [item for sublist in J for item in sublist] + range(N)
-    V = [[weight(nb, vtx) for nb in vtx.getVertexNeighbors()] for vtx in mesh.vertices]
-    V = [item for sublist in V for item in sublist] + [-sum(row) for row in V]
+    V = [item for sublist in V for item in sublist] + D
     L = sparse.coo_matrix((V, (I, J)), shape=(N, N)).tocsr()
     return L
 
@@ -46,10 +47,19 @@ def getLaplacianMatrixHelpSquareScale(mesh, weight):
     J = [item for sublist in J for item in sublist] + range(N)
     V = [[weight(nb, vtx) for nb in vtx.getVertexNeighbors()] for vtx in mesh.vertices]    
     V = [[v/-sum(row) for v in row] for row in V]
-    V = [item for sublist in V for item in sublist] + [1 for row in V]
+    V = [item for sublist in V for item in sublist] + [1]*len(V)
     L = sparse.coo_matrix((V, (J, I)), shape=(N, N)).tocsr()
     return L
 
+def umbrellaWeight(v1, v2):
+        return -1.0
+
+def cotangentWeight(v1, v2):
+        edge = getEdgeInCommon(v1, v2)
+        vtx = [[v for v in face.getVertices() if (v != v1) and (v != v2)][0] for face in [edge.f1, edge.f2] if face]
+        pos = [[v1.getPos()-v3.getPos(), v2.getPos()-v3.getPos()] for v3 in vtx]
+        cot = [np.dot(v3[0], v3[1])/np.linalg.norm(np.cross(v3[0], v3[1])) for v3 in pos]
+        return -sum(cot)/len(cot)
 
 #Purpose: To return a sparse matrix representing a Laplacian matrix with
 #the graph Laplacian (D - A) in the upper square part and anchors as the
@@ -58,9 +68,7 @@ def getLaplacianMatrixHelpSquareScale(mesh, weight):
 #Returns: L (An (N+K) x N sparse matrix, where N is the number of vertices
 #and K is the number of anchors)
 def getLaplacianMatrixUmbrella(mesh, anchorsIdx):
-    def weight(v1, v2):
-        return -1.0
-    return getLaplacianMatrixHelp(mesh, anchorsIdx, weight)
+    return getLaplacianMatrixHelp(mesh, anchorsIdx, umbrellaWeight)
 
 #Purpose: To return a sparse matrix representing a laplacian matrix with
 #cotangent weights in the upper square part and anchors as the lower rows
@@ -68,13 +76,7 @@ def getLaplacianMatrixUmbrella(mesh, anchorsIdx):
 #Returns: L (An (N+K) x N sparse matrix, where N is the number of vertices
 #and K is the number of anchors)
 def getLaplacianMatrixCotangent(mesh, anchorsIdx):
-    def weight(v1, v2):
-        edge = getEdgeInCommon(v1, v2)
-        vtx = [[v for v in face.getVertices() if (v != v1) and (v != v2)][0] for face in [edge.f1, edge.f2] if face]
-        pos = [[v1.getPos()-v3.getPos(), v2.getPos()-v3.getPos()] for v3 in vtx]
-        cot = [np.dot(v3[0], v3[1])/np.linalg.norm(np.cross(v3[0], v3[1])) for v3 in pos]
-        return -sum(cot)/len(cot)
-    return getLaplacianMatrixHelp(mesh, anchorsIdx, weight)
+    return getLaplacianMatrixHelp(mesh, anchorsIdx, cotangentWeight)
 
 #Purpose: Given a mesh, to perform Laplacian mesh editing by solving the system
 #of delta coordinates and anchors in the least squared sense
@@ -99,16 +101,13 @@ def smoothColors(mesh, colors, colorsIdx):
     delta[-len(colorsIdx):, :] = colors
     for col in range(3):
         mesh.VPos[:, col] = lsqr(L, delta[:, col])[0]
-    return mesh.VPos
 
 #Purpose: Given a mesh, to smooth it by subtracting off the delta coordinates
 #from each vertex, normalized by the degree of that vertex
 #Inputs: mesh (polygon mesh object)
 #Returns: Nothing (should update mesh.VPos)
 def doLaplacianSmooth(mesh):
-    def weight(v1, v2):
-        return -1.0
-    L = getLaplacianMatrixHelpSquareScale(mesh, weight)
+    L = getLaplacianMatrixHelpSquareScale(mesh, umbrellaWeight)
     mesh.VPos = np.subtract(mesh.VPos, L*mesh.VPos)
 
 #Purpose: Given a mesh, to sharpen it by adding back the delta coordinates
@@ -116,9 +115,7 @@ def doLaplacianSmooth(mesh):
 #Inputs: mesh (polygon mesh object)
 #Returns: Nothing (should update mesh.VPos)
 def doLaplacianSharpen(mesh):
-    def weight(v1, v2):
-        return -1.0
-    L = getLaplacianMatrixHelpSquareScale(mesh, weight)
+    L = getLaplacianMatrixHelpSquareScale(mesh, umbrellaWeight)
     mesh.VPos = np.add(mesh.VPos, L*mesh.VPos)
 
 #Purpose: Given a mesh and a set of anchors, to simulate a minimal surface
@@ -137,7 +134,6 @@ def makeMinimalSurface(mesh, anchors, anchorsIdx):
         delta[anchorsIdx[i]] = anchors[i]
     for col in range(3):
         mesh.VPos[:, col] = lsqr(L, delta[:, col])[0]
-    return mesh.VPos
 
 ##############################################################
 ##        Spectral Representations / Heat Flow              ##
@@ -148,9 +144,7 @@ def makeMinimalSurface(mesh, anchors, anchorsIdx):
 #Inputs: mesh (polygon mesh object), K (number of eigenvalues/eigenvectors)
 #Returns: (eigvalues, eigvectors): a tuple of the eigenvalues and eigenvectors
 def getLaplacianSpectrum(mesh, K):
-    def weight(v1, v2):
-        return -1.0
-    L = getLaplacianMatrixHelpSquare(mesh, weight)
+    L = getLaplacianMatrixHelp(mesh, [], umbrellaWeight)
     (eigvalues, eigvectors) = sparse.linalg.eigsh(L, K, which='LM', sigma = 0) 
     return (eigvalues, eigvectors)
 
@@ -159,13 +153,7 @@ def getLaplacianSpectrum(mesh, K):
 #Inputs: mesh (polygon mesh object), K (number of eigenvalues/eigenvectors)
 #Returns: Nothing (should update mesh.VPos)
 def doLowpassFiltering(mesh, K):
-    def weight(v1, v2):
-        edge = getEdgeInCommon(v1, v2)
-        vtx = [[v for v in face.getVertices() if (v != v1) and (v != v2)][0] for face in [edge.f1, edge.f2] if face]
-        pos = [[v1.getPos()-v3.getPos(), v2.getPos()-v3.getPos()] for v3 in vtx]
-        cot = [np.dot(v3[0], v3[1])/np.linalg.norm(np.cross(v3[0], v3[1])) for v3 in pos]
-        return -sum(cot)/len(cot)
-    L = getLaplacianMatrixHelpSquare(mesh, weight)
+    L = getLaplacianMatrixHelp(mesh, [], cotangentWeight)
     vals, vecs = eigsh(L, K, which='LM',sigma=0)
     for col in range(3):
         mesh.VPos[:,col] = np.dot(np.dot(vecs, np.transpose(vecs)),mesh.VPos[:,col])
@@ -207,8 +195,19 @@ def getHKS(mesh, K, t):
 #into the mesh of the four points that are to be anchored, in CCW order)
 #Returns: nothing (update mesh.VPos)
 def doFlattening(mesh, quadIdxs):
-    print "TODO"
-    #TODO: Finish this
+    if len(quadIdxs) != 4:
+        print "please select 4 points"
+        return
+    N = len(mesh.vertices)
+    # L = getLaplacianMatrixUmbrella(mesh, [])
+    # L[quadIdxs, :] = [[1 if i == index else 0 for i in range(N)] for index in quadIdxs]
+    L = getLaplacianMatrixHelp2(mesh, quadIdxs, umbrellaWeight)
+    delta = np.zeros((N, 3))
+    delta[quadIdxs, :] = [[0, 0, 0], [0, 1, 0], [1, 0, 0], [1, 1, 0]]
+    for col in range(3):
+        mesh.VPos[:, col] = lsqr(L, delta[:, col])[0]
+    # mesh.VPos[:, 2] = 0
+    print mesh.VPos
 
 #Purpose: Given 4 vertex indices on a quadrilateral, to anchor them to the 
 #square and flatten the rest of the mesh inside of that square.  Then, to 
@@ -225,5 +224,7 @@ if __name__ == '__main__':
     print "TODO"
     # mesh = PolyMesh()
     # mesh.loadFile("meshes/homer.off")
-    # solveLaplacianMesh(mesh, np.array([[0,0,0],[1,1,1]]), np.array([3,5]))
+    # doFlattening(mesh, [0, 1, 2, 3])
+    # print [vtx.ID for vtx in mesh.vertices]
+    # makeMinimalSurface(mesh, np.array([[0,0,0],[1,1,1]]), np.array([3,5]))
     # print getLaplacianMatrixUmbrella(mesh, np.array([3,5])) != getLaplacianMatrixCotangent(mesh, np.array([3,5]))
