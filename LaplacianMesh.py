@@ -33,11 +33,21 @@ def getLaplacianMatrixHelpSquare(mesh, weight):
     J = [[index]*len(row) for index, row in enumerate(I)]
     I = [item for sublist in I for item in sublist] + range(N)
     J = [item for sublist in J for item in sublist] + range(N)
-    #J = np.concatenate((J, anchorsIdx))
     V = [[weight(nb, vtx) for nb in vtx.getVertexNeighbors()] for vtx in mesh.vertices]
-    V = [item for sublist in V for item in sublist] + [-sum(row) for row in V] #+ [1]*K
-
+    V = [item for sublist in V for item in sublist] + [-sum(row) for row in V]
     L = sparse.coo_matrix((V, (I, J)), shape=(N, N)).tocsr()
+    return L
+
+def getLaplacianMatrixHelpSquareScale(mesh, weight):
+    N = len(mesh.vertices)
+    I = [[nb.ID for nb in vtx.getVertexNeighbors()] for vtx in mesh.vertices]
+    J = [[index]*len(row) for index, row in enumerate(I)]
+    I = [item for sublist in I for item in sublist] + range(N)
+    J = [item for sublist in J for item in sublist] + range(N)
+    V = [[weight(nb, vtx) for nb in vtx.getVertexNeighbors()] for vtx in mesh.vertices]    
+    V = [[v/-sum(row) for v in row] for row in V]
+    V = [item for sublist in V for item in sublist] + [1 for row in V]
+    L = sparse.coo_matrix((V, (J, I)), shape=(N, N)).tocsr()
     return L
 
 
@@ -91,12 +101,6 @@ def smoothColors(mesh, colors, colorsIdx):
         mesh.VPos[:, col] = lsqr(L, delta[:, col])[0]
     return mesh.VPos
 
-    
-#    N = mesh.VPos.shape[0]
-#    colors = np.zeros((N, 3)) #dummy values (all black)
-#    #TODO: Finish this
-#    return colors
-
 #Purpose: Given a mesh, to smooth it by subtracting off the delta coordinates
 #from each vertex, normalized by the degree of that vertex
 #Inputs: mesh (polygon mesh object)
@@ -104,12 +108,8 @@ def smoothColors(mesh, colors, colorsIdx):
 def doLaplacianSmooth(mesh):
     def weight(v1, v2):
         return -1.0
-    L = getLaplacianMatrixHelpSquare(mesh, weight)
-    for i in range(L.shape[0]):
-        L[i] = np.true_divide(L[i].nonzero(), L[i,i])
-    print(L)
+    L = getLaplacianMatrixHelpSquareScale(mesh, weight)
     mesh.VPos = np.subtract(mesh.VPos, L*mesh.VPos)
-    #TODO: Finish this
 
 #Purpose: Given a mesh, to sharpen it by adding back the delta coordinates
 #from each vertex, normalized by the degree of that vertex
@@ -118,14 +118,8 @@ def doLaplacianSmooth(mesh):
 def doLaplacianSharpen(mesh):
     def weight(v1, v2):
         return -1.0
-    L = getLaplacianMatrixHelpSquare(mesh, weight)
-    print(L)
-    for i in range(L.shape[0]):
-        if L[i,i]!=0:
-            L[i] = np.true_divide(L[i], L[i,i])
-    print(L)
+    L = getLaplacianMatrixHelpSquareScale(mesh, weight)
     mesh.VPos = np.add(mesh.VPos, L*mesh.VPos)
-    #TODO: Finish this
 
 #Purpose: Given a mesh and a set of anchors, to simulate a minimal surface
 #by replacing the rows of the laplacian matrix with the anchors, setting
@@ -154,7 +148,6 @@ def makeMinimalSurface(mesh, anchors, anchorsIdx):
 #Inputs: mesh (polygon mesh object), K (number of eigenvalues/eigenvectors)
 #Returns: (eigvalues, eigvectors): a tuple of the eigenvalues and eigenvectors
 def getLaplacianSpectrum(mesh, K):
-    #TODO: Finish this
     def weight(v1, v2):
         return -1.0
     L = getLaplacianMatrixHelpSquare(mesh, weight)
