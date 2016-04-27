@@ -126,7 +126,9 @@ def doLaplacianSharpen(mesh):
 #coordinates), anchorsIdx (a parallel array of the indices of the anchors)
 #Returns: Nothing (should update mesh.VPos)
 def makeMinimalSurface(mesh, anchors, anchorsIdx):
-    L = getLaplacianMatrixCotangent(mesh, anchorsIdx)
+    def weight(v1, v2):
+        return -1.0
+    L = getLaplacianMatrixHelpSquare(mesh, weight)
     delta = np.zeros((L.shape[0],mesh.VPos.shape[1]))
     for i in range(len(anchorsIdx)):
         L[anchorsIdx[i],:]=0
@@ -134,6 +136,7 @@ def makeMinimalSurface(mesh, anchors, anchorsIdx):
         delta[anchorsIdx[i]] = anchors[i]
     for col in range(3):
         mesh.VPos[:, col] = lsqr(L, delta[:, col])[0]
+    return mesh.VPos
 
 ##############################################################
 ##        Spectral Representations / Heat Flow              ##
@@ -207,6 +210,7 @@ def doFlattening(mesh, quadIdxs):
     for col in range(3):
         mesh.VPos[:, col] = lsqr(L, delta[:, col])[0]
     # mesh.VPos[:, 2] = 0
+    print mesh.VPos
 
 #Purpose: Given 4 vertex indices on a quadrilateral, to anchor them to the 
 #square and flatten the rest of the mesh inside of that square.  Then, to 
@@ -223,7 +227,6 @@ if __name__ == '__main__':
     print "TODO"
     # mesh = PolyMesh()
     # mesh.loadFile("meshes/homer.off")
-    # print getLaplacianMatrixHelp(mesh, [], cotangentWeight) != getLaplacianMatrixHelp2(mesh, [], cotangentWeight)
     # doFlattening(mesh, [0, 1, 2, 3])
     # print [vtx.ID for vtx in mesh.vertices]
     # makeMinimalSurface(mesh, np.array([[0,0,0],[1,1,1]]), np.array([3,5]))
