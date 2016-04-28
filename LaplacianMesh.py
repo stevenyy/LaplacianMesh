@@ -26,17 +26,26 @@ def getLaplacianMatrixHelp(mesh, anchorsIdx, weight):
     L = sparse.coo_matrix((V, (I, J)), shape=(N+K, N)).tocsr()
     return L
 
-def getLaplacianMatrixHelp2(mesh, quadIdxs, weight):
+def getLaplacianMatrixHelp2(mesh, anchorsIdx, weight, inPlace = False):
     N = len(mesh.vertices)
+    if inPlace:  
+        K = 0 
+        quadIdxs = anchorsIdx
+        anchorsIdx = []
+    else:
+        K = len(anchorsIdx)
+        quadIdxs = []     
     X = [vtx.getVertexNeighbors() if vtx.ID not in quadIdxs else [] for vtx in mesh.vertices]
     I = [[index]*len(row) for index, row in enumerate(X)]
     J = [[nb.ID for nb in row] for row in X]
     V = [[weight(nb, mesh.vertices[index]) for nb in row] for index, row in enumerate(X)]
     D = [-sum(row) if index not in quadIdxs else 1 for index, row in enumerate(V)]
-    I = [item for sublist in I for item in sublist] + range(N)
+    I = [item for sublist in I for item in sublist] + range(N+K)
+    
     J = [item for sublist in J for item in sublist] + range(N)
-    V = [item for sublist in V for item in sublist] + D
-    L = sparse.coo_matrix((V, (I, J)), shape=(N, N)).tocsr()
+    J = np.concatenate((J, anchorsIdx))
+    V = [item for sublist in V for item in sublist] + D + [1]*K
+    L = sparse.coo_matrix((V, (I, J)), shape=(N+K, N)).tocsr()
     return L
 
 def getLaplacianMatrixHelpSquareScale(mesh, weight):
@@ -150,7 +159,7 @@ def getLaplacianSpectrum(mesh, K):
 #Inputs: mesh (polygon mesh object), K (number of eigenvalues/eigenvectors)
 #Returns: Nothing (should update mesh.VPos)
 def doLowpassFiltering(mesh, K):
-    L = getLaplacianMatrixHelp(mesh, [], cotangentWeight)
+    L = getLaplacianMatrixHelp(mesh, [], cotangentWeight, True)
     vals, vecs = eigsh(L, K, which='LM',sigma=0)
     for col in range(3):
         mesh.VPos[:,col] = np.dot(np.dot(vecs, np.transpose(vecs)),mesh.VPos[:,col])
@@ -195,7 +204,7 @@ def doFlattening(mesh, quadIdxs):
     if len(quadIdxs) != 4:
         print "please select 4 points"
         return
-    L = getLaplacianMatrixHelp2(mesh, quadIdxs, umbrellaWeight)
+    L = getLaplacianMatrixHelp2(mesh, quadIdxs, umbrellaWeight, True)
     delta = np.zeros((len(mesh.vertices), 3))
     delta[quadIdxs, :] = [[0, 0, 0], [0, 1, 0], [1, 0, 0], [1, 1, 0]]
     for col in range(3):
@@ -221,4 +230,5 @@ if __name__ == '__main__':
     # doFlattening(mesh, [0, 1, 2, 3])
     # print [vtx.ID for vtx in mesh.vertices]
     # makeMinimalSurface(mesh, np.array([[0,0,0],[1,1,1]]), np.array([3,5]))
+    # print getLaplacianMatrixHelp2(mesh, [], umbrellaWeight) != getLaplacianMatrixHelp(mesh, [], umbrellaWeight)
     # print getLaplacianMatrixUmbrella(mesh, np.array([3,5])) != getLaplacianMatrixCotangent(mesh, np.array([3,5]))
