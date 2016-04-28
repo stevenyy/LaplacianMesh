@@ -192,7 +192,7 @@ def doFlattening(mesh, quadIdxs):
         return
     L = getLaplacianMatrixHelp(mesh, quadIdxs, umbrellaWeight, True)
     delta = np.zeros((len(mesh.vertices), 3))
-    delta[quadIdxs, :] = [[0, 0, 0], [0, 1, 0], [1, 0, 0], [1, 1, 0]]
+    delta[quadIdxs, :] = [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]]
     for col in range(3):
         mesh.VPos[:, col] = lsqr(L, delta[:, col])[0]
     # mesh.VPos[:, 2] = 0
