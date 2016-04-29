@@ -183,8 +183,13 @@ def getHeat(mesh, eigvalues, eigvectors, t, initialVertices, heatValue = 100.0):
 #Returns: hks (a length N array of the HKS values)
 def getHKS(mesh, K, t):
     N = mesh.VPos.shape[0]
-    hks = np.zeros(N) #Dummy value
-    return hks #TODO: Finish this
+    hks = np.zeros(N) 
+    (eigvalues, eigvectors) = getLaplacianSpectrum(mesh, K)
+    #summing
+    for i in range(0,N):
+        for j in range(0, K):
+            hks[i] += np.exp(-eigvalues[j]*t)*np.square(eigvectors[:,j][i])
+    return hks
 
 ##############################################################
 ##                Parameterization/Texturing               ##
