@@ -163,8 +163,17 @@ def doLowpassFiltering(mesh, K):
 #Returns: heat (a length N array of heat values on the mesh)
 def getHeat(mesh, eigvalues, eigvectors, t, initialVertices, heatValue = 100.0):
     N = mesh.VPos.shape[0]
-    heat = np.zeros(N) #Dummy value
-    return heat #TODO: Finish this
+    # print "size of mesh.vertices %d" % len(mesh.vertices)
+    #constructing f0 function for each vertices
+    F = np.zeros(N)
+    for i in range(0,N):
+        if mesh.vertices[i].ID in initialVertices:
+            F[i] = heatValue
+    #summing
+    heat = np.zeros(N)
+    for i in range(0,len(eigvalues)):
+        heat += F.T.dot(eigvectors[:,i])*np.exp(-eigvalues[i]*t)*eigvectors[:,i]
+    return heat
 
 #Purpose: Given a mesh, to approximate its curvature at some measurement scale
 #by recording the amount of heat that stays at each vertex after a unit impulse
@@ -210,8 +219,10 @@ def getTexCoords(mesh, quadIdxs):
 
 if __name__ == '__main__':
     print "TODO"
-    # mesh = PolyMesh()
-    # mesh.loadFile("meshes/homer.off")
+    mesh = PolyMesh()
+    mesh.loadFile("meshes/homer.off")
+    (eigenvalues, eigenvectors) = getLaplacianSpectrum(mesh, 20)
+    getHeat(mesh, eigenvalues, eigenvectors, 20, [0, 10, 13])
     # doFlattening(mesh, [0, 1, 2, 3])
     # makeMinimalSurface(mesh, np.array([[0,0,0],[1,1,1]]), np.array([3,5]))
     # print [vtx.ID for vtx in mesh.vertices]
