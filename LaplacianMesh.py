@@ -223,11 +223,12 @@ def getTexCoords(mesh, quadIdxs):
     return U #TODO: Finish this
 
 if __name__ == '__main__':
-    print "TODO"
-    mesh = PolyMesh()
-    mesh.loadFile("meshes/homer.off")
-    (eigenvalues, eigenvectors) = getLaplacianSpectrum(mesh, 20)
-    getHeat(mesh, eigenvalues, eigenvectors, 20, [0, 10, 13])
+    #testing for heat
+    # mesh = PolyMesh()
+    # mesh.loadFile("meshes/homer.off")
+    # (eigenvalues, eigenvectors) = getLaplacianSpectrum(mesh, 20)
+    # getHeat(mesh, eigenvalues, eigenvectors, 20, [0, 10, 13])
+
     # doFlattening(mesh, [0, 1, 2, 3])
     # makeMinimalSurface(mesh, np.array([[0,0,0],[1,1,1]]), np.array([3,5]))
     # print [vtx.ID for vtx in mesh.vertices]
